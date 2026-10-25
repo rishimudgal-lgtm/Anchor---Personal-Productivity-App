@@ -1,0 +1,18 @@
+name: my_management_hub
+description: "A personal planner for assignments, spending, pantry items, and progress."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_local_notifications: ^22.3.3
+  flutter_timezone: ^5.1.1
+  shared_preferences: ^2.5.5
+  timezone: ^0.11.2
+
+flutter:
+  uses-material-design: true
