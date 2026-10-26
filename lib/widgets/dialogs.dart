@@ -45,6 +45,18 @@ void _showReminderPermissionMessage(BuildContext context, String itemName) {
   );
 }
 
+Future<void> _closeRouteThen(
+  BuildContext routeContext,
+  BuildContext nextContext,
+  VoidCallback action,
+) async {
+  final route = ModalRoute.of(routeContext);
+  Navigator.of(routeContext).pop();
+  if (route != null) await route.completed;
+  if (!nextContext.mounted) return;
+  action();
+}
+
 Future<void> showTaskDialog(
   BuildContext context,
   HubState state, {
@@ -957,10 +969,9 @@ void showQuickAddSheet(
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text('Build a repeatable daily or weekly rhythm'),
-              onTap: () {
-                Navigator.pop(ctx);
+              onTap: () => _closeRouteThen(ctx, context, () {
                 onOpenHabits?.call();
-              },
+              }),
             ),
             const SizedBox(height: 6),
             ListTile(
@@ -981,10 +992,9 @@ void showQuickAddSheet(
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text('Plan deadlines, projects, and reminders'),
-              onTap: () {
-                Navigator.pop(ctx);
+              onTap: () => _closeRouteThen(ctx, context, () {
                 showTaskDialog(context, state);
-              },
+              }),
             ),
             const SizedBox(height: 6),
             ListTile(
@@ -1005,10 +1015,9 @@ void showQuickAddSheet(
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text('Record purchases and monitor your budget'),
-              onTap: () {
-                Navigator.pop(ctx);
+              onTap: () => _closeRouteThen(ctx, context, () {
                 showExpenseDialog(context, state);
-              },
+              }),
             ),
             const SizedBox(height: 6),
             ListTile(
@@ -1029,10 +1038,9 @@ void showQuickAddSheet(
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text('Track expiry dates and avoid waste'),
-              onTap: () {
-                Navigator.pop(ctx);
+              onTap: () => _closeRouteThen(ctx, context, () {
                 showPantryDialog(context, state);
-              },
+              }),
             ),
             const SizedBox(height: 6),
             ListTile(
@@ -1053,10 +1061,9 @@ void showQuickAddSheet(
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text('Keep a quick list of what to buy'),
-              onTap: () {
-                Navigator.pop(ctx);
+              onTap: () => _closeRouteThen(ctx, context, () {
                 showShoppingItemDialog(context, state);
-              },
+              }),
             ),
             const SizedBox(height: 6),
             ListTile(
@@ -1074,10 +1081,9 @@ void showQuickAddSheet(
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text('Go to your Pomodoro timer and progress'),
-              onTap: () {
-                Navigator.pop(ctx);
+              onTap: () => _closeRouteThen(ctx, context, () {
                 onOpenTimer?.call();
-              },
+              }),
             ),
           ],
         ),
@@ -1211,10 +1217,13 @@ void showSettingsSheet(BuildContext context, HubState state) {
                     '${state.currency}${state.monthlyBudget.toStringAsFixed(0)}',
                   ),
                   trailing: TextButton(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      showBudgetDialog(context, state);
-                    },
+                    onPressed: () => _closeRouteThen(
+                      sheetContext,
+                      context,
+                      () {
+                        showBudgetDialog(context, state);
+                      },
+                    ),
                     child: const Text('Change'),
                   ),
                 ),
@@ -1283,10 +1292,9 @@ void showSettingsSheet(BuildContext context, HubState state) {
                   ),
                   title: const Text('Import Hub Data (Restore)'),
                   subtitle: const Text('Restore from a pasted JSON backup'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
+                  onTap: () => _closeRouteThen(sheetContext, context, () {
                     _showImportDialog(context, state);
-                  },
+                  }),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1301,10 +1309,9 @@ void showSettingsSheet(BuildContext context, HubState state) {
                   subtitle: const Text(
                     'Reset all tasks, expenses, and pantry items',
                   ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
+                  onTap: () => _closeRouteThen(sheetContext, context, () {
                     _showClearConfirmDialog(context, state);
-                  },
+                  }),
                 ),
               ],
             ),
