@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as timezone_data;
@@ -15,41 +16,113 @@ class ReminderService {
 
   static const _channelId = 'hub_reminders';
   static const _reminderHour = 9;
+  static const _settingsChannel = MethodChannel('anchor/notifications');
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  Future<void>? _initialization;
 
   bool get supportsScheduledReminders =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  Future<void> initialize() async {
-    if (_initialized) return;
+  Future<void> initialize() {
+    if (_initialized) return Future<void>.value();
     if (!supportsScheduledReminders) {
       _initialized = true;
-      return;
+      return Future<void>.value();
     }
+    return _initialization ??= _initializePlatform();
+  }
 
-    timezone_data.initializeTimeZones();
-    final localTimezone = await FlutterTimezone.getLocalTimezone();
-    timezone.setLocalLocation(timezone.getLocation(localTimezone.identifier));
+  Future<void> _initializePlatform() async {
+    try {
+      timezone_data.initializeTimeZones();
+      try {
+        final localTimezone = await FlutterTimezone.getLocalTimezone();
+        timezone.setLocalLocation(
+          timezone.getLocation(localTimezone.identifier),
+        );
+      } catch (error) {
+        // A timezone plugin failure should not disable reminders. Use the
+        // device's current UTC offset as a fixed-offset fallback for this run.
+        final now = DateTime.now();
+        final abbreviation = now.timeZoneName.isEmpty
+            ? 'Local'
+            : now.timeZoneName;
+        timezone.setLocalLocation(
+          timezone.Location('Local/$abbreviation', const [], const [], [
+            timezone.TimeZone(
+              now.timeZoneOffset,
+              isDst: false,
+              abbreviation: abbreviation,
+            ),
+          ]),
+        );
+        debugPrint(
+          'Could not read the device timezone; using its current UTC offset: $error',
+        );
+      }
 
-    await _notifications.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@drawable/ic_stat_anchor'),
-      ),
-    );
-    _initialized = true;
+      final initialized = await _notifications.initialize(
+        settings: const InitializationSettings(
+          android: AndroidInitializationSettings('@drawable/ic_stat_anchor'),
+        ),
+      );
+      if (initialized != true) {
+        throw StateError('Android notification plugin did not initialize.');
+      }
+      _initialized = true;
+    } catch (_) {
+      _initialization = null;
+      rethrow;
+    }
   }
 
   Future<bool> requestPermission() async {
-    if (!supportsScheduledReminders || !_initialized) return false;
+    if (!supportsScheduledReminders) return false;
+    try {
+      await initialize();
+    } catch (error) {
+      debugPrint(
+        'Could not initialize reminders before requesting permission: $error',
+      );
+      return false;
+    }
 
     final android = _notifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-    return await android?.requestNotificationsPermission() ?? false;
+    try {
+      return await android?.requestNotificationsPermission() ?? false;
+    } catch (error) {
+      debugPrint('Could not request notification permission: $error');
+      return false;
+    }
+  }
+
+  Future<bool> areNotificationsEnabled() async {
+    if (!supportsScheduledReminders || !_initialized) return false;
+    final android = _notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    try {
+      return await android?.areNotificationsEnabled() ?? false;
+    } catch (error) {
+      debugPrint('Could not read notification permission status: $error');
+      return false;
+    }
+  }
+
+  Future<void> openNotificationSettings() async {
+    if (!supportsScheduledReminders) return;
+    try {
+      await _settingsChannel.invokeMethod<void>('openNotificationSettings');
+    } catch (error) {
+      debugPrint('Could not open notification settings: $error');
+    }
   }
 
   Future<void> scheduleTask(HubTask task) async {

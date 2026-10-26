@@ -42,6 +42,9 @@ class HubState extends ChangeNotifier {
 
   String get currency => settings.currency;
   double get monthlyBudget => settings.monthlyBudget;
+  bool get hasEnabledReminders =>
+      tasks.any((task) => task.reminderEnabled && !task.isDone) ||
+      pantry.any((item) => item.reminderEnabled);
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -93,6 +96,11 @@ class HubState extends ChangeNotifier {
       await prefs.setString(_settingsKey, jsonEncode(settings.toJson()));
     }
     notifyListeners();
+  }
+
+  /// Rebuilds OS schedules from persisted items after notification setup.
+  Future<void> refreshReminderSchedules() async {
+    await _reminders.replaceSchedules(tasks, pantry);
   }
 
   List<T> _readList<T>(String? raw, T Function(Map<String, Object?>) decode) {

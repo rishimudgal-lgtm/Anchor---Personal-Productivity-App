@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
@@ -35,6 +37,9 @@ class _MyManagementHubState extends State<MyManagementHub> {
   bool _loading = true;
   Object? _storageError;
   Object? _reminderError;
+  bool _stateLoaded = false;
+  bool _remindersReady = false;
+  bool _schedulesRestored = false;
 
   @override
   void initState() {
@@ -47,12 +52,7 @@ class _MyManagementHubState extends State<MyManagementHub> {
       _loading = true;
       _storageError = null;
     });
-    Object? reminderError;
-    try {
-      await widget.reminders.initialize();
-    } catch (error) {
-      reminderError = error;
-    }
+    unawaited(_initializeReminders());
 
     Object? storageError;
     try {
@@ -62,18 +62,70 @@ class _MyManagementHubState extends State<MyManagementHub> {
     }
 
     if (!mounted) return;
+    _stateLoaded = storageError == null;
     setState(() {
       _loading = false;
       _storageError = storageError;
-      _reminderError = reminderError;
     });
+    unawaited(_restoreSavedReminders());
+  }
+
+  Future<void> _initializeReminders() async {
+    try {
+      await widget.reminders.initialize();
+      _remindersReady = true;
+      if (mounted) setState(() => _reminderError = null);
+      await _restoreSavedReminders();
+    } catch (error, stackTrace) {
+      debugPrint('Local reminder initialization failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) setState(() => _reminderError = error);
+    }
+  }
+
+  Future<void> _restoreSavedReminders() async {
+    if (!_stateLoaded || !_remindersReady || _schedulesRestored) return;
+    _schedulesRestored = true;
+    try {
+      await widget.state.refreshReminderSchedules();
+      if (widget.state.hasEnabledReminders &&
+          !await widget.reminders.areNotificationsEnabled() &&
+          mounted) {
+        setState(
+          () => _reminderError = StateError(
+            'Notifications are off for Anchor Hub. Tap Enable to turn them on.',
+          ),
+        );
+      }
+    } catch (error, stackTrace) {
+      _schedulesRestored = false;
+      debugPrint('Could not restore saved reminders: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) setState(() => _reminderError = error);
+    }
   }
 
   Future<void> _retryReminders() async {
     try {
       await widget.reminders.initialize();
-      if (mounted) setState(() => _reminderError = null);
-    } catch (error) {
+      final granted = await widget.reminders.requestPermission();
+      if (granted) {
+        await widget.state.refreshReminderSchedules();
+        _schedulesRestored = true;
+        if (mounted) setState(() => _reminderError = null);
+      } else {
+        await widget.reminders.openNotificationSettings();
+        if (mounted) {
+          setState(
+            () => _reminderError = StateError(
+              'Turn on notifications for Anchor Hub in Android settings, then tap Enable again.',
+            ),
+          );
+        }
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Could not enable local reminders: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) setState(() => _reminderError = error);
     }
   }
@@ -152,14 +204,16 @@ class _MyManagementHubState extends State<MyManagementHub> {
       children: [
         if (_reminderError != null)
           MaterialBanner(
-            content: const Text(
-              'Local reminders could not start. The rest of the app is ready.',
+            content: Text(
+              'Local reminders could not start: $_reminderError',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             leading: const Icon(Icons.notifications_off_outlined),
             actions: [
               TextButton(
                 onPressed: _retryReminders,
-                child: const Text('Retry'),
+                child: const Text('Enable'),
               ),
               TextButton(
                 onPressed: () => setState(() => _reminderError = null),

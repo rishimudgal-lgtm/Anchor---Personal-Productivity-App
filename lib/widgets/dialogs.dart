@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +7,7 @@ import '../core/theme/app_theme.dart';
 import '../hub_state.dart';
 import '../models.dart';
 import '../reminder_service.dart';
+import 'dialog_controller_owner.dart';
 
 DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 String _longDate(DateTime date) {
@@ -24,6 +27,22 @@ String _longDate(DateTime date) {
     'Dec',
   ];
   return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}, ${date.year}';
+}
+
+void _showReminderPermissionMessage(BuildContext context, String itemName) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        '$itemName saved. Allow Anchor Hub notifications in Android settings, then turn on this reminder.',
+      ),
+      action: SnackBarAction(
+        label: 'Settings',
+        onPressed: () => unawaited(
+          ReminderService.instance.openNotificationSettings(),
+        ),
+      ),
+    ),
+  );
 }
 
 Future<void> showTaskDialog(
@@ -48,7 +67,9 @@ Future<void> showTaskDialog(
 
   final saved = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
+    builder: (dialogContext) => DialogControllerOwner(
+      controllers: [title, subject, notes],
+      child: StatefulBuilder(
       builder: (context, setLocalState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(isEditing ? 'Edit Assignment / Task' : 'Add to Planner'),
@@ -213,12 +234,14 @@ Future<void> showTaskDialog(
           ),
         ],
       ),
+      ),
     ),
   );
 
   if (saved == true) {
+    bool wasEnabled;
     if (isEditing) {
-      await state.updateTask(
+      wasEnabled = await state.updateTask(
         existingTask.copyWith(
           title: title.text.trim(),
           subject: subject.text.trim(),
@@ -230,7 +253,7 @@ Future<void> showTaskDialog(
         ),
       );
     } else {
-      final wasEnabled = await state.addTask(
+      wasEnabled = await state.addTask(
         title: title.text.trim(),
         subject: subject.text.trim(),
         notes: notes.text.trim(),
@@ -239,21 +262,12 @@ Future<void> showTaskDialog(
         reminderEnabled: reminderEnabled,
         recurrence: recurrence,
       );
-      if (reminderEnabled && !wasEnabled && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Task saved. Turn on notification permissions to receive reminders.',
-            ),
-          ),
-        );
-      }
+    }
+    if (reminderEnabled && !wasEnabled && context.mounted) {
+      _showReminderPermissionMessage(context, 'Task');
     }
   }
 
-  title.dispose();
-  subject.dispose();
-  notes.dispose();
 }
 
 Future<void> showExpenseDialog(
@@ -286,7 +300,9 @@ Future<void> showExpenseDialog(
 
   final saved = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
+    builder: (dialogContext) => DialogControllerOwner(
+      controllers: [title, amount, notes],
+      child: StatefulBuilder(
       builder: (context, setLocalState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(isEditing ? 'Edit Expense' : 'Log an Expense'),
@@ -388,6 +404,7 @@ Future<void> showExpenseDialog(
           ),
         ],
       ),
+      ),
     ),
   );
 
@@ -414,9 +431,6 @@ Future<void> showExpenseDialog(
     }
   }
 
-  title.dispose();
-  amount.dispose();
-  notes.dispose();
 }
 
 Future<void> showPantryDialog(
@@ -448,7 +462,9 @@ Future<void> showPantryDialog(
 
   final saved = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
+    builder: (dialogContext) => DialogControllerOwner(
+      controllers: [name, quantity],
+      child: StatefulBuilder(
       builder: (context, setLocalState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(isEditing ? 'Edit Pantry Item' : 'Add Pantry Item'),
@@ -561,12 +577,14 @@ Future<void> showPantryDialog(
           ),
         ],
       ),
+      ),
     ),
   );
 
   if (saved == true) {
+    bool wasEnabled;
     if (isEditing) {
-      await state.updatePantryItem(
+      wasEnabled = await state.updatePantryItem(
         existingPantry.copyWith(
           name: name.text.trim(),
           quantity: quantity.text.trim(),
@@ -576,7 +594,7 @@ Future<void> showPantryDialog(
         ),
       );
     } else {
-      await state.addPantryItem(
+      wasEnabled = await state.addPantryItem(
         name: name.text.trim(),
         quantity: quantity.text.trim(),
         expiryDate: expiry,
@@ -584,10 +602,11 @@ Future<void> showPantryDialog(
         category: category,
       );
     }
+    if (reminderEnabled && !wasEnabled && context.mounted) {
+      _showReminderPermissionMessage(context, 'Pantry item');
+    }
   }
 
-  name.dispose();
-  quantity.dispose();
 }
 
 Future<void> showBudgetDialog(BuildContext context, HubState state) async {
@@ -598,7 +617,9 @@ Future<void> showBudgetDialog(BuildContext context, HubState state) async {
 
   final saved = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => DialogControllerOwner(
+      controllers: [controller],
+      child: AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       title: const Text('Monthly Budget'),
       content: Form(
@@ -645,13 +666,13 @@ Future<void> showBudgetDialog(BuildContext context, HubState state) async {
         ),
       ],
     ),
+    ),
   );
 
   if (saved == true) {
     final amount = double.parse(controller.text.replaceAll(',', '.'));
     await state.setMonthlyBudget(amount);
   }
-  controller.dispose();
 }
 
 Future<void> showShoppingItemDialog(
@@ -667,7 +688,9 @@ Future<void> showShoppingItemDialog(
   final formKey = GlobalKey<FormState>();
   final saved = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => DialogControllerOwner(
+      controllers: [name, quantity, category],
+      child: AlertDialog(
       title: Text(existingItem == null ? 'Add to Shopping List' : 'Edit Item'),
       content: SizedBox(
         width: 420,
@@ -715,6 +738,7 @@ Future<void> showShoppingItemDialog(
         ),
       ],
     ),
+    ),
   );
   if (saved == true) {
     if (existingItem == null) {
@@ -735,9 +759,6 @@ Future<void> showShoppingItemDialog(
       );
     }
   }
-  name.dispose();
-  quantity.dispose();
-  category.dispose();
 }
 
 Future<void> showCurrencyConverterDialog(
@@ -751,7 +772,9 @@ Future<void> showCurrencyConverterDialog(
   var usdToInr = true;
   await showDialog<void>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
+    builder: (dialogContext) => DialogControllerOwner(
+      controllers: [rateController, amountController],
+      child: StatefulBuilder(
       builder: (context, setLocalState) {
         final rate = double.tryParse(rateController.text) ?? 0;
         final amount = double.tryParse(amountController.text) ?? 0;
@@ -829,10 +852,9 @@ Future<void> showCurrencyConverterDialog(
           ],
         );
       },
+      ),
     ),
   );
-  rateController.dispose();
-  amountController.dispose();
 }
 
 Future<void> showWeeklyGoalsDialog(BuildContext context, HubState state) async {
@@ -842,7 +864,9 @@ Future<void> showWeeklyGoalsDialog(BuildContext context, HubState state) async {
   );
   final saved = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => DialogControllerOwner(
+      controllers: [tasks, focus],
+      child: AlertDialog(
       title: const Text('Weekly Goals'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -875,6 +899,7 @@ Future<void> showWeeklyGoalsDialog(BuildContext context, HubState state) async {
         ),
       ],
     ),
+    ),
   );
   if (saved == true) {
     await state.setWeeklyGoals(
@@ -883,8 +908,6 @@ Future<void> showWeeklyGoalsDialog(BuildContext context, HubState state) async {
           int.tryParse(focus.text) ?? state.settings.weeklyFocusGoalMinutes,
     );
   }
-  tasks.dispose();
-  focus.dispose();
 }
 
 void showQuickAddSheet(
@@ -895,12 +918,18 @@ void showQuickAddSheet(
 }) {
   showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+    ),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
     ),
     builder: (ctx) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1290,7 +1319,9 @@ void _showImportDialog(BuildContext context, HubState state) {
   final controller = TextEditingController();
   showDialog<void>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => DialogControllerOwner(
+      controllers: [controller],
+      child: AlertDialog(
       title: const Text('Restore from Backup'),
       content: SizedBox(
         width: 440,
@@ -1326,6 +1357,7 @@ void _showImportDialog(BuildContext context, HubState state) {
           child: const Text('Restore'),
         ),
       ],
+    ),
     ),
   );
 }

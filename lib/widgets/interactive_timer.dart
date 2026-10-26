@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/app_theme.dart';
 import '../hub_state.dart';
+import 'dialog_controller_owner.dart';
 import 'animations.dart';
 
 class InteractiveTimerWidget extends StatefulWidget {
@@ -568,7 +569,9 @@ class _InteractiveTimerWidgetState extends State<InteractiveTimerWidget>
     final controller = TextEditingController(text: _sessionLabel);
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DialogControllerOwner(
+        controllers: [controller],
+        child: AlertDialog(
         title: const Text('Session Topic'),
         content: TextField(
           controller: controller,
@@ -593,6 +596,7 @@ class _InteractiveTimerWidgetState extends State<InteractiveTimerWidget>
             child: const Text('Save'),
           ),
         ],
+        ),
       ),
     );
   }
