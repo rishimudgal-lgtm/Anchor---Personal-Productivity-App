@@ -20,8 +20,15 @@ class ReminderService {
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
+  bool get supportsScheduledReminders =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
   Future<void> initialize() async {
     if (_initialized) return;
+    if (!supportsScheduledReminders) {
+      _initialized = true;
+      return;
+    }
 
     timezone_data.initializeTimeZones();
     final localTimezone = await FlutterTimezone.getLocalTimezone();
@@ -29,14 +36,14 @@ class ReminderService {
 
     await _notifications.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('@drawable/ic_stat_anchor'),
       ),
     );
     _initialized = true;
   }
 
   Future<bool> requestPermission() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    if (!supportsScheduledReminders || !_initialized) return false;
 
     final android = _notifications
         .resolvePlatformSpecificImplementation<
@@ -46,6 +53,7 @@ class ReminderService {
   }
 
   Future<void> scheduleTask(HubTask task) async {
+    if (!supportsScheduledReminders || !_initialized) return;
     final id = _notificationId(task.id, pantry: false);
     if (!task.reminderEnabled || task.isDone) {
       await _notifications.cancel(id: id);
@@ -64,6 +72,7 @@ class ReminderService {
   }
 
   Future<void> schedulePantryItem(PantryEntry item) async {
+    if (!supportsScheduledReminders || !_initialized) return;
     final id = _notificationId(item.id, pantry: true);
     if (!item.reminderEnabled) {
       await _notifications.cancel(id: id);
@@ -100,11 +109,32 @@ class ReminderService {
   }
 
   Future<void> cancelTask(String id) async {
+    if (!supportsScheduledReminders || !_initialized) return;
     await _notifications.cancel(id: _notificationId(id, pantry: false));
   }
 
   Future<void> cancelPantryItem(String id) async {
+    if (!supportsScheduledReminders || !_initialized) return;
     await _notifications.cancel(id: _notificationId(id, pantry: true));
+  }
+
+  Future<void> cancelAll() async {
+    if (!supportsScheduledReminders || !_initialized) return;
+    await _notifications.cancelAll();
+  }
+
+  Future<void> replaceSchedules(
+    List<HubTask> tasks,
+    List<PantryEntry> pantry,
+  ) async {
+    if (!supportsScheduledReminders || !_initialized) return;
+    await cancelAll();
+    for (final task in tasks) {
+      await scheduleTask(task);
+    }
+    for (final item in pantry) {
+      await schedulePantryItem(item);
+    }
   }
 
   Future<void> _schedule({

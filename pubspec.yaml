@@ -1,5 +1,5 @@
 name: my_management_hub
-description: "A personal planner for assignments, spending, pantry items, and progress."
+description: "Plan tasks, track spending and pantry items, and build focus habits."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -14,5 +14,11 @@ dependencies:
   shared_preferences: ^2.5.5
   timezone: ^0.11.2
 
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
 flutter:
   uses-material-design: true
+  assets:
+    - assets/brand/anchor_hub_logo.png
